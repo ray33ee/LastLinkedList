@@ -3,3 +3,8 @@
 - Add insert, remove and other functions, taking/returning Iterators
 - Add push (alias for append) and pop routines (base pop on remove with the iterator as the _tail node)
 - Add useful traits to LastLinkedList
+- Organise directory structure, addling LLL to modules, packages, etc.
+- Make sure any iterators used also implement the custom drop() function used in LastLinkedList
+- Add _previous field to all iterators.
+    - This will be used in functions like insert and remove for repairing the list after insertions and removals
+- Create generic function for dropping LLL and iterators, instead of copying code

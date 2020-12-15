@@ -1,18 +1,20 @@
 
 use std::rc::Rc;
+use std::rc::Weak;
 use std::cell::RefCell;
+use std::time::{Instant};
+use std::collections::LinkedList;
 
 type NodeRef<T> = Option<Rc<RefCell<Node<T>>>>;
+type NodeWeak<T> = Option<Weak<RefCell<Node<T>>>>;
 
 struct Node<T>
-    where T: Clone
 {
     _next: NodeRef<T>,
     _data: T
 }
 
 impl<T> Node<T>
-    where T: Clone
 {
     fn new(node: NodeRef<T>, data: T) -> Self {
         Node {
@@ -23,13 +25,11 @@ impl<T> Node<T>
 }
 
 struct Iterator<T>
-    where T: Clone
 {
     _reference: NodeRef<T>
 }
 
 impl<T> std::iter::Iterator for Iterator<T>
-    where T: Clone
 {
     type Item = T;
 
@@ -39,7 +39,7 @@ impl<T> std::iter::Iterator for Iterator<T>
 
                 let tmp = current_node.clone();
 
-                let next_node = current_node.borrow_mut()._next.clone();
+                let next_node = current_node.borrow()._next.clone();
 
                 self._reference = next_node;
 
@@ -63,14 +63,12 @@ impl<T> std::iter::Iterator for Iterator<T>
 }
 
 struct LastLinkedList<T>
-    where T: Clone
 {
     _head: NodeRef<T>,
-    _tail: NodeRef<T>
+    _tail: NodeWeak<T>
 }
 
 impl<T> LastLinkedList<T>
-    where T: Clone
 {
     fn new() -> Self {
         LastLinkedList {
@@ -85,14 +83,19 @@ impl<T> LastLinkedList<T>
 
         match self._tail.take() {
             Some(ref old_tail) => {
-                old_tail.borrow_mut()._next = Some(ref_node.clone());
+                let strong_tail = old_tail.upgrade().unwrap();
+                strong_tail.borrow_mut()._next = Some(ref_node.clone());
             }
             None => {
                 self._head = Some(ref_node.clone());
             }
         }
 
-        self._tail = Some(ref_node.clone());
+        self._tail = Some(Rc::downgrade(&ref_node));
+    }
+
+    fn push_back(&mut self, data: T) {
+        self.append(data);
     }
 
     fn prepend(&mut self, data: T) {
@@ -104,7 +107,7 @@ impl<T> LastLinkedList<T>
                 ref_node.borrow_mut()._next = Some(old_head.clone());
             }
             None => {
-                self._head = Some(ref_node.clone());
+                self._tail = Some(Rc::downgrade(&ref_node));
             }
         }
 
@@ -112,60 +115,106 @@ impl<T> LastLinkedList<T>
 
     }
 
-
-
-    /*fn print(&mut self) {
-        let mut it = self._head.clone().unwrap();
-        loop {
-
-            println!("{}", it.borrow_mut()._data);
-
-            let bor = it.borrow_mut()._next.clone();
-
-            if bor.is_none() {
-                break;
-            }
-
-            it = bor.unwrap();
-        }
-    }*/
-
 }
 
 impl<T> std::iter::IntoIterator for LastLinkedList<T>
-    where T: Clone
 {
     type Item = T;
     type IntoIter = Iterator<T>;
 
     fn into_iter(self) -> Self::IntoIter {
         Iterator {
-            _reference: self._head
+            _reference: self._head.clone()
         }
+    }
+}
 
+impl<T> std::ops::Drop for LastLinkedList<T> {
+    fn drop(&mut self) {
+        let mut node = self._head.clone();
+
+        self._head = None;
+        self._tail = None;
+
+        loop {
+            match node.take() {
+                Some(raw_node) => {
+                    let next_node = raw_node.borrow()._next.clone();
+
+                    match Rc::try_unwrap(raw_node) {
+                        Ok(ref_cell) => {
+                            ref_cell.into_inner();
+                        }
+                        Err(_) => {
+                            // If we find a node with more than one strong reference, we should stop immediately
+                            break
+                        }
+                    }
+                    node = next_node;
+                }
+                None => {
+                    break
+                }
+
+            }
+
+        }
+    }
+}
+
+impl<T> std::ops::Drop for Iterator<T> {
+    fn drop(&mut self) {
+        let mut node = self._reference.clone();
+
+        self._reference = None;
+
+        loop {
+            match node.take() {
+                Some(raw_node) => {
+                    let next_node = raw_node.borrow()._next.clone();
+
+                    match Rc::try_unwrap(raw_node) {
+                        Ok(ref_cell) => {
+                            ref_cell.into_inner(); //Calling this function will destroy the cell then return the inner value. SInce we dont assign it to anything, it is destroyed
+                        }
+                        Err(_) => {
+                            // If we find a node with more than one strong reference, we should stop immediately
+                            break
+                        }
+                    }
+                    node = next_node;
+                }
+                None => {
+                    break
+                }
+
+            }
+
+        }
     }
 }
 
 fn main() {
     println!("Hello, world!");
 
+    let array_size = 100000;
+
     let mut lll = LastLinkedList::<i32>::new();
 
-    lll.append(33);
-    lll.append(3);
-    lll.append(11);
+    //let mut lll = LinkedList::new();
 
-    lll.prepend(22);
 
-    for i in lll {
+    let start = Instant::now();
+
+    for i in 0..array_size {
+        lll.push_back(i);
+    }
+
+    let duration = start.elapsed();
+    println!("Elapsed: {:?}", duration);
+
+    /*for i in lll {
         println!("{}", i);
-    }
-
-    let mut ve = Vec::<i32>::new();
-
-    for i in ve {
-
-    }
-
+    }*/
 
 }
