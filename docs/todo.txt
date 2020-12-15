@@ -1,0 +1,5 @@
+
+- Add iter() and iter_mut, and their corresponding iterator structs
+- Add insert, remove and other functions, taking/returning Iterators
+- Add push (alias for append) and pop routines (base pop on remove with the iterator as the _tail node)
+- Add useful traits to LastLinkedList
